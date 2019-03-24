@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>| Chart app</title>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+		<style>
+			body {
+				position: absolute;
+				left: 0;
+				top: 0;
+				margin: 0;
+				padding: 0;
+				width: 100%;
+				height: 100%;
+			}				
+			#chartsView {
+				position: relative;
+			}
+			#textView {
+				background-color: transparent;
+				position: absolute;
+				left: 0px;
+				top: 0px;
+				z-index: 10;			
+			}
+			#switchMode {
+				position: absolute;
+				left: 0px;
+				top: 0px;
+				z-index: 10000;
+				cursor: pointer;
+				
+				height: 40px;
+				
+			}
+			.partView {
+				position: absolute;
+				left: 0px;
+				top: 0px;
+				border: 1px solid #aaaaaa;
+				z-index: 9999;
+			}
+		</style>
+		<script	type="text/javascript" src="js/reqAnimFrameFix.js"></script>
+	</head>
+	<body>
+		<canvas id="chartsView"></canvas>
+		<canvas id="textView"></canvas>
+		<button id="switchMode">Switch to Night Mode</button>
+		<script type="x-shader/x-vertex" id="vshader">
+			attribute float x;
+			attribute float y;
+			uniform mat3 transform;
+			uniform vec2 dim;
+			void main() {
+				vec3 vpos = transform * vec3(x, y, 1);
+				vec2 vpos01 = 2.0 * (vec2(vpos.x, vpos.y)/dim) - 1.0;				
+				gl_Position = vec4(vpos01, 0, 1);
+			}
+		</script>		
+		<script type="x-shader/x-fragment" id="fshader">
+			precision highp float;
+			uniform vec4 graphColor;
+			void main() {
+				gl_FragColor = vec4(graphColor);
+			}
+		</script>
+		<script type="text/javascript" src="js/chart_data.js"></script>
+		<script type="text/javascript" src="js/main.js"></script>
+	</body>
+</html>

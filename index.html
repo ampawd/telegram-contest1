@@ -14,7 +14,9 @@
 				height: 100%;
 			}				
 			#chartsView {
-				position: relative;
+				position: absolute;
+				left: 0;
+				top: 0;
 			}
 			#textView {
 				background-color: transparent;
@@ -28,10 +30,8 @@
 				left: 0px;
 				top: 0px;
 				z-index: 10000;
-				cursor: pointer;
-				
-				height: 40px;
-				
+				cursor: pointer;				
+				height: 40px;				
 			}
 			.partView {
 				position: absolute;
@@ -40,8 +40,15 @@
 				border: 1px solid #aaaaaa;
 				z-index: 9999;
 			}
+			.chartTitle {
+				position: absolute;
+				left: 0;
+				top: 0;
+				font-size: 20px;
+				font-weight: bold;
+				font-family: arial;
+			}
 		</style>
-		<script	type="text/javascript" src="js/reqAnimFrameFix.js"></script>
 	</head>
 	<body>
 		<canvas id="chartsView"></canvas>

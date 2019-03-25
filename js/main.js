@@ -1,4 +1,11 @@
-;(function() {
+;(function() {	
+	// TODO:
+	// 1. Avoid copying of x and y values into additional vertices array in createChartComponents function, instead 
+	//	directly them from chartData array into GPU when calling gl.bufferData after modifying its values
+	// 2. Finish the rest of functionality
+	// 3. Investigate for further optimizations (precompute some things)
+	// 4. Clean up the code
+	
 	// globals
 	let viewWidth  = window.innerWidth;
 	let viewHeight = 0;
@@ -9,14 +16,6 @@
 		vertexPositionLocation,
 		dimensionLoc,
 		graphColorLoc;
-		
-	function onresize(gl, textCnv) {
-		gl.canvas.width = viewWidth;
-		gl.canvas.height = viewHeight;		
-		textCnv.width = viewWidth;		
-		textCnv.height = viewHeight;		
-		gl.viewport(0, 0, viewWidth, viewHeight);
-	}
 	
 	function compileShader(source, shaderType, gl) {
 		let shader = gl.createShader(shaderType);
@@ -59,6 +58,14 @@
 		graphColorLoc = gl.getUniformLocation(shaderProgram, "graphColor");
 	}
 	
+	function onresize(gl, textCnv) {
+		gl.canvas.width = viewWidth;
+		gl.canvas.height = viewHeight;		
+		textCnv.width = viewWidth;		
+		textCnv.height = viewHeight;		
+		gl.viewport(0, 0, viewWidth, viewHeight);
+	}
+	
 	function setUpEvents(gl, textCnv) {
 		addEventListener("resize", function(e) {
 			onresize(gl, textCnv); 
@@ -69,7 +76,9 @@
 		gl.clearColor(1.0, 1.0, 1.0, 1.0);
 		onresize(gl, textCnv);
 		setUpEvents(gl, textCnv);
-		setUpShaders(gl);			
+		setUpShaders(gl);
+		gl.canvas.style.left = window.innerWidth*0.5 - parseFloat(gl.canvas.getAttribute("width")*0.5) + "px";
+		textCnv.style.left = window.innerWidth*0.5 - parseFloat(textCnv.getAttribute("width")*0.5) + "px";
 	}
 	
 	function hexToRgb(hex) {
@@ -153,7 +162,6 @@
 	function createChartComponents(gl, ctx, chartData, chartParams, uiParams) {
 		//	init buffers
 		let vBuff = gl.createBuffer();
-		let	indexBuffer = gl.createBuffer();
 		let	linesBuff = gl.createBuffer();		
 		let	vertices = [];
 		let lineVertices = [];
@@ -177,13 +185,12 @@
 		}
 		let linesCount = Math.ceil((chartParams.height)/70);
 		ctx.font = "9pt verdana, sans-serif";
-		ctx.fillStyle = "#666666";			
+		ctx.fillStyle = "#666666";
 
 		for (let i = 0; i < linesCount; i++) {
 			let y = chartParams.yl + i*70;
 			lineVertices.push(chartParams.xl, y, chartParams.xl + chartParams.width, y);
 		}
-		let datesCount = Math.ceil(chartParams.width/90);
 		// setup buffers
 		gl.bindBuffer(gl.ARRAY_BUFFER, linesBuff);
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lineVertices), gl.STATIC_DRAW);			
@@ -202,35 +209,33 @@
 					gl.bindBuffer(gl.ARRAY_BUFFER, linesBuff);
 					gl.vertexAttribPointer(xPosLoc, 1, gl.FLOAT, false, linesStride, 0);
 					gl.vertexAttribPointer(yPosLoc, 1, gl.FLOAT, false, linesStride, 4);
-					gl.drawArrays(gl.LINES, 0, numHorLinesPoints);					
+					gl.drawArrays(gl.LINES, 0, numHorLinesPoints);
 				},
 			renderGraph:
 				function(transform2dMatrix, chartIndex) {
-					gl.uniform2fv(dimensionLoc, [viewWidth, viewHeight]);		
-					if (transform2dMatrix) {
-						gl.uniformMatrix3fv(transformLoc, false, transform2dMatrix);					
-					}
+					gl.uniform2fv(dimensionLoc, [viewWidth, viewHeight]);
+					gl.uniformMatrix3fv(transformLoc, false, transform2dMatrix);					
 					gl.bindBuffer(gl.ARRAY_BUFFER, vBuff);					
 					gl.vertexAttribPointer(xPosLoc, 1, gl.FLOAT, false, stride, 0);					
 					for (let i = 0; i < graphsCount; ++i) {
 						gl.uniform4fv(graphColorLoc, [graphColors[i][0], graphColors[i][1], graphColors[i][2], 1]);						
 						gl.vertexAttribPointer(yPosLoc, 1, gl.FLOAT, false, stride, (i + 1)*offset);			
 						gl.drawArrays(gl.LINE_STRIP, 0, numGraphPoints);
-					}					
+					}
 				},
 			renderGraphText:
 				function(labelXInfo) {
 					for (let i = 0; i < linesCount; i++) {
 						let y = chartParams.yl + i*70;
 						let labelY = mapTo(i*70, 0, chartParams.height, minY, maxY);
-						ctx.fillText(parseInt(labelY), chartParams.xl + 5, viewHeight - y - 5);
+						ctx.fillText(parseInt(labelY), chartParams.xl, viewHeight - y - 10);
 					}
 					let step = 0;
 					for (let i = labelXInfo.start; step <= chartParams.width; step += 100, i += 2) {
 						let dateUnix = chartData.columns[0][i];
 						let date = unixTimeStampToDate(dateUnix);//.substr(3, 8);
 						ctx.fillText(date, 
-							chartParams.xl + step + (date.length > 5 ? -5 : 0), 
+							chartParams.xl + step, 
 							viewHeight - chartParams.yl + 20
 						);
 					}
@@ -240,14 +245,21 @@
 	
 	function createChart(gl, ctx, chartData, chartParams, uiParams, index) {
 		let partViewBlock = document.createElement("div");
-		let fullViewBlock = document.createElement("div");
+		//let fullViewBlock = document.createElement("div");
 		partViewBlock.className = "partView";
 		partViewBlock.setAttribute("data-chart-index", index);
 		partViewBlock.style.width = chartParams.width*0.25 + "px";
 		partViewBlock.style.height = chartParams.partViewHeight + "px";
 		partViewBlock.style.top = (viewHeight - chartParams.yl + 45 ) + "px";
-		partViewBlock.style.left = chartParams.xl + "px";
+		partViewBlock.style.left = chartParams.xl + parseFloat(gl.canvas.style.left) + "px";
 		document.body.appendChild(partViewBlock);		
+		let chartTitle = document.createElement("div");
+		chartTitle.className = "chartTitle";
+		chartTitle.style.left = 10 + parseFloat(partViewBlock.style.left) + "px";
+		chartTitle.style.top = viewHeight - chartParams.height - chartParams.yl - 70 + "px";
+		//console.log(chartData);
+		chartTitle.innerHTML = "Chart #" + index;
+		document.body.appendChild(chartTitle);
 		let components = createChartComponents(gl, ctx, chartData, chartParams, uiParams);
 		return components;
 	}
@@ -267,37 +279,54 @@
 		return finalTransform;
 	}
 	
+	function setNightMode(gl, uiParams, switchMode) {
+		let chartTitles = document.getElementsByClassName("chartTitle");
+		[].forEach.call(chartTitles, function (title) { title.style.color = "#ddffff"; });
+		switchMode.innerHTML = "Switch to Day Mode";
+		let col = hexToRgb("#262F3D".substr(1));
+		document.body.style.backgroundColor = "#262F3D";
+		gl.clearColor(col[0], col[1], col[2], 1.0);
+		uiParams.nightMode = 1;
+		uiParams.ctx.fillStyle = "#bbbbbb";
+		uiParams.linesColor[0] = uiParams.linesColor[1] = uiParams.linesColor[2] = 0.2;
+		uiParams.linesColor[3] = 0.25;
+	}
+	
+	function setDayMode(gl, uiParams, switchMode) {
+		let chartTitles = document.getElementsByClassName("chartTitle");
+		[].forEach.call(chartTitles, function (title) { title.style.color = "#000000"; });
+		switchMode.innerHTML = "Switch to Night Mode";
+		gl.clearColor(1.0, 1.0, 1.0, 1.0);
+		document.body.style.backgroundColor = "#ffffff";
+		uiParams.nightMode = 0;
+		uiParams.ctx.fillStyle = "#666666";			
+		uiParams.linesColor[0] = uiParams.linesColor[1] = uiParams.linesColor[2] = 0;
+		uiParams.linesColor[3] = 0.25;
+	}
+	
 	function setUpUi(gl, uiParams) {
 		let switchMode = document.getElementById("switchMode");
+		let clicked = false;
 		switchMode.style.width = 150 + "px";
 		switchMode.style.top = 20 + "px";
 		switchMode.style.left = window.innerWidth/2 - 150/2 + "px";
-		clicked = true;
+		if (uiParams.nightMode) {
+			setNightMode(gl, uiParams, switchMode);
+		} else {
+			setDayMode(gl, uiParams, switchMode);
+		}
 		switchMode.onclick = function(e) {
 			if (clicked) {
-				this.innerHTML = "Switch to Day Mode";
-				let col = hexToRgb("#262F3D".substr(1));
-				document.body.style.backgroundColor = "#262F3D";
-				gl.clearColor(col[0], col[1], col[2], 1.0);
-				uiParams.nightMode = 1;
-				uiParams.ctx.fillStyle = "#bbbbbb";
-				uiParams.linesColor[0] = uiParams.linesColor[1] = uiParams.linesColor[2] = 0.2;
-				uiParams.linesColor[3] = 0.25;
+				setNightMode(gl, uiParams, switchMode);
 			} else {
-				this.innerHTML = "Switch to Night Mode";
-				gl.clearColor(1.0, 1.0, 1.0, 1.0);
-				document.body.style.backgroundColor = "#ffffff";
-				uiParams.nightMode = 0;
-				uiParams.ctx.fillStyle = "#666666";			
-				uiParams.linesColor[0] = uiParams.linesColor[1] = uiParams.linesColor[2] = 0;
-				uiParams.linesColor[3] = 0.25;
+				setDayMode(gl, uiParams, switchMode);
 			}
-			clicked = ! clicked;
+			clicked = !clicked;
 		};
 	}
 	
 	function setPartViewDraggable(xl, graphWidth, animParams, dateDiffUnix) {
-		let partViewBlockWidth = parseFloat(document.getElementsByClassName("partView")[0].style.width);
+		//let partViewBlockWidth = parseFloat(document.getElementsByClassName("partView")[0].style.width);
 		let T = identity();
 		document.addEventListener("mousedown", function(e) {
 			if (e.target.className == "partView") {
@@ -311,7 +340,7 @@
 				animParams.chartIndex = chartIndex;
 				view.style.cursor = "pointer";
 				document.onmousemove = function(e) {
-					x = e.clientX - startX;					
+					x = e.clientX - startX;
 					deltaX = parseFloat(view.style.left) - viewLeft;
 					viewLeft = parseFloat(view.style.left);					
 					let sign = deltaX > 0 ? -1 : 1;					
@@ -325,12 +354,12 @@
 					translate(T, dx, 0);
 					animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);					
 					view.style.left = x + "px";	
-					let start = parseInt((mapTo(x, xl, graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix);
+					let start = parseInt((mapTo(x, xl, xl + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix);
 					animParams.labelsXInfo[chartIndex].start = start + 1;
 				}
 				document.onmouseup = function(e) {
-					document.onmousemove = null; 
-					strechFromEdge = false;
+					document.onmousemove = null;
+					//strechFromEdge = false;
 				}
 			}
 		});
@@ -344,7 +373,7 @@
 		let gl = graphsCnv.getContext("webgl");
 		let ctx = textCnv.getContext("2d");
 		let timerID = 0;
-		let ident = identity();		
+		let ident = identity();
 		let prevYl = 0;
 		let charts = [];
 		let chartParams = {};
@@ -353,20 +382,21 @@
 			chartParams.height = 300;
 			chartParams.partViewHeight = chartParams.height*0.5;
 		let animParams = { xranges: [], finalTransforms: [], labelsXInfo: []};
-		let uiParams = {nightMode: 0, ctx: ctx, linesColor: [0, 0, 0, 0.25]};		
+		let uiParams = {nightMode: 1, ctx: ctx, linesColor: [0, 0, 0, 0.25]};
 		viewWidth = chartParams.width;
 		viewHeight = chartsData.length * (chartParams.height + chartParams.partViewHeight) * 1.8;
-		setUpChartApp(gl, textCnv);			
+		//gl.ctx = ctx;
+		setUpChartApp(gl, textCnv);
 		
 		for (let i = 0; i < chartsData.length; ++i) {
 			let T = 		 identity(),
-			S = 			 identity(),
-			TBack = 		 identity(),
-			finalTransform = identity();
+				S = 			 identity(),
+				TBack = 		 identity(),
+				finalTransform = identity();
 			scale(S, 4, 1);
 			finalTransform = multMatrices(S, finalTransform);
 			finalTransform = multMatrices(T, finalTransform);
-			animParams.finalTransforms[i] = finalTransform.slice();	
+			animParams.finalTransforms[i] = finalTransform.slice();
 			chartParams.yl = prevYl ? prevYl - (chartParams.partViewHeight + chartParams.height)*1.6 :
 				viewHeight - (chartParams.partViewHeight + chartParams.height);				
 			let chart = createChart(gl, ctx, chartsData[i], Object.assign({}, chartParams), uiParams, i);
@@ -378,7 +408,9 @@
 		}
 		
 		let dateDiffUnix = chartsData[0].columns[0][2] - chartsData[0].columns[0][1];
-		setPartViewDraggable(chartParams.xl, chartParams.width, animParams, dateDiffUnix);		
+		setPartViewDraggable(parseFloat(gl.canvas.style.left), chartParams.width, animParams, dateDiffUnix);		
+		setUpUi(gl, uiParams);
+		
 		function renderScene() {
 			timerID = requestAnimationFrame(renderScene);
 			gl.clear(gl.COLOR_BUFFER_BIT);
@@ -389,9 +421,8 @@
 				charts[i][0].renderGraphText(animParams.labelsXInfo[i]);			
 				charts[i][0].renderGraph(charts[i][1]);	
 			}
-		}		
-		setUpUi(gl, uiParams);
+		}
 		timerID = requestAnimationFrame(renderScene);
-	}	
+	}
 	main();
 })();

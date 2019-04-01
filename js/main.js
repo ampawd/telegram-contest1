@@ -1,9 +1,9 @@
 ;(function() {	
 	// TODO:
-	// 1. Avoid copying of x and y values into additional vertices array in createChartComponents function, instead 
-	//	directly them from chartData array into GPU when calling gl.bufferData after modifying its values
-	// 2. Finish the rest of functionality
+	// 1. Finish the rest of functionality
+	// 2. Add mobile support (touch events translation to regular drag events)
 	// 3. Investigate for further optimizations (precompute some things)
+	// 		3.1 Change text canvas to webgl textures
 	// 4. Clean up the code
 	
 	// globals
@@ -337,23 +337,25 @@
 				let x = 0;
 				let deltaX = 0;
 				let viewLeft = parseFloat(view.style.left);
+				let rightEndBound = xl + graphWidth - view.clientWidth;
 				animParams.chartIndex = chartIndex;
 				view.style.cursor = "pointer";
 				document.onmousemove = function(e) {
 					x = e.clientX - startX;
-					deltaX = parseFloat(view.style.left) - viewLeft;
-					viewLeft = parseFloat(view.style.left);					
-					let sign = deltaX > 0 ? -1 : 1;					
+					let viewLeftNew = parseFloat(view.style.left);
+					deltaX = viewLeftNew - viewLeft;
+					viewLeft = viewLeftNew;					
 					if (x < xl) {
 						x = xl;
 					}
-					if (x > xl + graphWidth - view.clientWidth) {
-						x = xl + graphWidth - view.clientWidth;
+					if (x > rightEndBound) {
+						x = rightEndBound;
 					}
+					view.style.left = x + "px";	
+					let sign = deltaX > 0 ? -1 : 1;
 					let dx = sign*Math.abs(4*deltaX);
 					translate(T, dx, 0);
 					animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);					
-					view.style.left = x + "px";	
 					let start = parseInt((mapTo(x, xl, xl + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix);
 					animParams.labelsXInfo[chartIndex].start = start + 1;
 				}
@@ -389,7 +391,7 @@
 		setUpChartApp(gl, textCnv);
 		
 		for (let i = 0; i < chartsData.length; ++i) {
-			let T = 		 identity(),
+			let T = 		 	 identity(),
 				S = 			 identity(),
 				TBack = 		 identity(),
 				finalTransform = identity();
@@ -414,11 +416,11 @@
 		function renderScene() {
 			timerID = requestAnimationFrame(renderScene);
 			gl.clear(gl.COLOR_BUFFER_BIT);
-			ctx.clearRect(0, 0, viewWidth, viewHeight);
+			ctx.clearRect(0, 0, viewWidth, viewHeight);	//	make text canvas height to be textheight size
 			for (let i = 0; i < charts.length; ++i) {
 				charts[i][0].renderGraphLines(ident, uiParams);
 				charts[i][0].renderGraph(animParams.finalTransforms[i], i);
-				charts[i][0].renderGraphText(animParams.labelsXInfo[i]);			
+				charts[i][0].renderGraphText(animParams.labelsXInfo[i]);
 				charts[i][0].renderGraph(charts[i][1]);	
 			}
 		}

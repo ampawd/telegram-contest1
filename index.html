@@ -12,6 +12,12 @@
 				padding: 0;
 				width: 100%;
 				height: 100%;
+				user-select: none;
+				-webkit-user-select: none;
+				-ms-user-select: none;
+				-webkit-touch-callout: none;
+				-o-user-select: none;
+				-moz-user-select: none;
 			}				
 			#chartsView {
 				position: absolute;
@@ -35,11 +41,29 @@
 			}
 			.partView {
 				position: absolute;
-				left: 0px;
-				top: 0px;
+				left: 0;				
+				top: 0;
+				bottom: 0;
+				display: block;
 				border: 1px solid #aaaaaa;
 				z-index: 9999;
+				cursor: grab;
+				
+				 <!-- box-sizing: border-box; -->
+				<!-- -moz-box-sizing: border-box; -->
+				<!-- -webkit-box-sizing: border-box; -->
+				<!-- margin: 10px; -->
+				<!-- border-left: 15px solid #bbbbbb; -->
+				<!-- border-right: 15px solid #bbbbbb; -->
 			}
+			<!-- .fullView { -->
+				<!-- position: absolute; -->
+				<!-- left: 0px; -->
+				<!-- top: 0px; -->
+				<!-- background-color: #ffffff; -->
+				<!-- opacity: 0.1; -->
+				<!-- z-index: -1; -->
+			<!-- } -->
 			.chartTitle {
 				position: absolute;
 				left: 0;

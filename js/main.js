@@ -1,13 +1,14 @@
 ;(function() {	
 	// TODO:
-	// 1. Finish the rest of functionality
+	// 1. Finish all features
 	// 2. Add mobile support (touch events translation to regular drag events)
 	// 3. Investigate for further optimizations (precompute some things)
-	// 		3.1 Change text canvas to webgl textures
+	// 		3.1. Change text canvas to webgl textures or make existing 2d text canvases heights to be equal font height
+	//		3.2. Don't render charts which are currently not visible on the screen
 	// 4. Clean up the code
 	
 	// globals
-	let viewWidth  = window.innerWidth;
+	let viewWidth  = 0;
 	let viewHeight = 0;
 	
 	let vshader,
@@ -22,7 +23,7 @@
 		gl.shaderSource(shader, source);
 		gl.compileShader(shader);
 
-		if ( ! gl.getShaderParameter(shader, gl.COMPILE_STATUS) ) {
+		if (! gl.getShaderParameter(shader, gl.COMPILE_STATUS) ) {
 			throw "could not compile shader:" + gl.getShaderInfoLog(shader);
 		}
 		return shader;
@@ -86,7 +87,7 @@
 		let r = (bigint >> 16) & 255;
 		let g = (bigint >> 8) & 255;
 		let b = bigint & 255;
-		return [r/256, g/256, b/256];
+		return [r/255, g/255, b/255];
 	}
 	
 	function multMatrices(lhs, rhs) {
@@ -99,17 +100,15 @@
 	}
 	
 	function translate(mat, tx, ty) {		
+		mat[0] = mat[4] = mat[8] = 1;
 		mat[1] = mat[2] = mat[3] = mat[5] = 0.0;
 		mat[6] = tx;
 		mat[7] = ty;
-		mat[0] = 1;
-		mat[4] = 1;
-		mat[8] = 1;
 	}
 	
 	function scale(mat, sx, sy) {
-		mat[1] = mat[2] = mat[3] = mat[5] = mat[6] = mat[7] = 0.0;
 		mat[0] = sx;
+		mat[1] = mat[2] = mat[3] = mat[5] = mat[6] = mat[7] = 0.0;
 		mat[4] = sy;
 		mat[8] = 1;
 	}
@@ -148,13 +147,13 @@
 			minX: chartData.columns[0][1], 
 			maxX: chartData.columns[0][len - 1]
 		};
-	}
+	}				
 	
 	function unixTimeStampToDate(UNIX_timestamp){
 		let a = new Date(UNIX_timestamp);
 		let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 		let month = months[a.getMonth()];
-		let date = a.getDate();;
+		let date = a.getDate();
 		let time = month + ' ' + date;
 		return time;
 	}
@@ -231,7 +230,9 @@
 						ctx.fillText(parseInt(labelY), chartParams.xl, viewHeight - y - 10);
 					}
 					let step = 0;
-					for (let i = labelXInfo.start; step <= chartParams.width; step += 100, i += 2) {
+					//console.log(labelXInfo.start, labelXInfo.end);
+					//for (let i = labelXInfo.start; step <= chartParams.width; step += 100, i += 2) {
+					for (let i = labelXInfo.start; i < labelXInfo.end; step += 100, i += 2) {
 						let dateUnix = chartData.columns[0][i];
 						let date = unixTimeStampToDate(dateUnix);//.substr(3, 8);
 						ctx.fillText(date, 
@@ -244,22 +245,30 @@
 	}
 	
 	function createChart(gl, ctx, chartData, chartParams, uiParams, index) {
+		// let fullViewBlock = document.createElement("div");
+		// fullViewBlock.className = "fullView";
+		// fullViewBlock.style.width = chartParams.width + "px";
+		// fullViewBlock.style.height = chartParams.partViewHeight + "px";
+		// fullViewBlock.style.top = (viewHeight - chartParams.yl + 45 ) + "px";
+		// fullViewBlock.style.left = chartParams.xl + parseFloat(gl.canvas.style.left) + "px";	
+		// document.body.appendChild(fullViewBlock);	
+		
 		let partViewBlock = document.createElement("div");
-		//let fullViewBlock = document.createElement("div");
 		partViewBlock.className = "partView";
 		partViewBlock.setAttribute("data-chart-index", index);
 		partViewBlock.style.width = chartParams.width*0.25 + "px";
 		partViewBlock.style.height = chartParams.partViewHeight + "px";
 		partViewBlock.style.top = (viewHeight - chartParams.yl + 45 ) + "px";
 		partViewBlock.style.left = chartParams.xl + parseFloat(gl.canvas.style.left) + "px";
-		document.body.appendChild(partViewBlock);		
+		document.body.appendChild(partViewBlock);
+		
 		let chartTitle = document.createElement("div");
 		chartTitle.className = "chartTitle";
 		chartTitle.style.left = 10 + parseFloat(partViewBlock.style.left) + "px";
 		chartTitle.style.top = viewHeight - chartParams.height - chartParams.yl - 70 + "px";
-		//console.log(chartData);
 		chartTitle.innerHTML = "Chart #" + index;
-		document.body.appendChild(chartTitle);
+		document.body.appendChild(chartTitle);		
+		
 		let components = createChartComponents(gl, ctx, chartData, chartParams, uiParams);
 		return components;
 	}
@@ -326,45 +335,91 @@
 	}
 	
 	function setPartViewDraggable(xl, graphWidth, animParams, dateDiffUnix) {
-		//let partViewBlockWidth = parseFloat(document.getElementsByClassName("partView")[0].style.width);
+		let partViewBlockWidth = parseFloat(document.getElementsByClassName("partView")[0].style.width);
 		let T = identity();
-		document.addEventListener("mousedown", function(e) {
+		let T1 = identity();
+		let S = identity();
+		let scaleFactor = graphWidth/partViewBlockWidth;
+		let start = 1, end = 1;
+		document.onmousedown = function(e) {
 			if (e.target.className == "partView") {
+				let x = e.clientX;
+				let deltaX = 0;
 				let view = e.target;
-				let startX = e.clientX - parseFloat(view.style.left);				
+				let shiftX = x - parseFloat(view.style.left);
+				let viewLeft = parseFloat(view.style.left);
 				let chartIndex = parseInt(view.getAttribute("data-chart-index"));
 				let xrange = animParams.xranges[chartIndex];
-				let x = 0;
-				let deltaX = 0;
-				let viewLeft = parseFloat(view.style.left);
-				let rightEndBound = xl + graphWidth - view.clientWidth;
+				let rightEndBound = 0;
+				let rightEndBoundNoViewWidth = xl + graphWidth;
+				let strechFromLeft = false;
+				let strechFromRight = false;
+				let edgeWidth = 12;
+				let viewMinWidth = 50;
 				animParams.chartIndex = chartIndex;
-				view.style.cursor = "pointer";
+				if (e.clientX + 20 >= viewLeft && e.clientX <= viewLeft + edgeWidth) {
+					strechFromLeft = true;
+				}		
+				if ((e.clientX >= viewLeft + view.clientWidth - edgeWidth 
+					&& e.clientX - 20 <= viewLeft + view.clientWidth)) {
+					strechFromRight = true;
+				}
 				document.onmousemove = function(e) {
-					x = e.clientX - startX;
 					let viewLeftNew = parseFloat(view.style.left);
 					deltaX = viewLeftNew - viewLeft;
 					viewLeft = viewLeftNew;					
-					if (x < xl) {
-						x = xl;
-					}
-					if (x > rightEndBound) {
-						x = rightEndBound;
-					}
-					view.style.left = x + "px";	
-					let sign = deltaX > 0 ? -1 : 1;
-					let dx = sign*Math.abs(4*deltaX);
-					translate(T, dx, 0);
-					animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);					
-					let start = parseInt((mapTo(x, xl, xl + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix);
-					animParams.labelsXInfo[chartIndex].start = start + 1;
+					if (strechFromLeft || strechFromRight) {
+						x = e.clientX;
+						if (strechFromLeft) {
+							if (x <= xl) x = xl;
+							if (x + viewMinWidth > rightEndBoundNoViewWidth) {
+								x = rightEndBoundNoViewWidth - viewMinWidth;
+							}
+							if (view.clientWidth > viewMinWidth) {							
+								view.style.left = x + "px";
+							}
+							view.style.width = view.clientWidth + (viewLeft - x) + "px";						
+						} else {
+							if (x >= rightEndBoundNoViewWidth) { x = rightEndBoundNoViewWidth; }
+							view.style.width = view.clientWidth + (x - view.clientWidth - viewLeft) + "px";
+						}
+						if (view.clientWidth > viewMinWidth) {			
+							scaleFactor = graphWidth/view.clientWidth;
+							let dx = xl - viewLeft;
+							translate(T1, dx, 0);
+							scale(S, scaleFactor, 1);
+							animParams.finalTransforms[chartIndex] = identity();
+							animParams.finalTransforms[chartIndex] = multMatrices(T1, animParams.finalTransforms[chartIndex]);
+							animParams.finalTransforms[chartIndex] = multMatrices(S, animParams.finalTransforms[chartIndex]);
+						}
+						if (view.clientWidth <= viewMinWidth) {
+							view.style.width = viewMinWidth + "px";
+						}
+					} else {
+						x = e.clientX - shiftX;
+						rightEndBound = rightEndBoundNoViewWidth - view.clientWidth
+						if (x <= xl) { x = xl; }
+						if (x >= rightEndBound) { x = rightEndBound; }
+						view.style.left = x + "px";
+						let dir = deltaX > 0 ? -1 : 1;
+						let dx = dir*Math.abs(scaleFactor*deltaX);
+						translate(T, dx, 0);
+						animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);					
+						// start = parseInt(
+							// (mapTo(x, xl, xl + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
+						// );
+						//view.style.right = rightEndBound - x + "px";
+					}			
+					// convert slider x coordinate into x-axis array index
+					//console.log(start, end);
+					// animParams.labelsXInfo[chartIndex].start = start + 1;
+					// animParams.labelsXInfo[chartIndex].end = end;
 				}
 				document.onmouseup = function(e) {
 					document.onmousemove = null;
-					//strechFromEdge = false;
 				}
 			}
-		});
+		};
 	}
 	
 /*--------------------------------------	 app entry point	 --------------------------------------*/
@@ -380,16 +435,16 @@
 		let charts = [];
 		let chartParams = {};
 			chartParams.xl = 0;
-			chartParams.width = 750;
+			chartParams.width = window.innerWidth * 0.65;
 			chartParams.height = 300;
 			chartParams.partViewHeight = chartParams.height*0.5;
 		let animParams = { xranges: [], finalTransforms: [], labelsXInfo: []};
 		let uiParams = {nightMode: 1, ctx: ctx, linesColor: [0, 0, 0, 0.25]};
 		viewWidth = chartParams.width;
-		viewHeight = chartsData.length * (chartParams.height + chartParams.partViewHeight) * 1.8;
-		//gl.ctx = ctx;
+		//viewHeight = chartsData.length * (chartParams.height + chartParams.partViewHeight) * 1.7;
+		viewHeight = 3*(chartParams.height + chartParams.partViewHeight);
 		setUpChartApp(gl, textCnv);
-		
+		console.log(chartsData);
 		for (let i = 0; i < chartsData.length; ++i) {
 			let T = 		 	 identity(),
 				S = 			 identity(),
@@ -416,11 +471,11 @@
 		function renderScene() {
 			timerID = requestAnimationFrame(renderScene);
 			gl.clear(gl.COLOR_BUFFER_BIT);
-			ctx.clearRect(0, 0, viewWidth, viewHeight);	//	make text canvas height to be textheight size
+			//ctx.clearRect(0, 0, viewWidth, viewHeight);	//	make text canvas height to be textheight size
 			for (let i = 0; i < charts.length; ++i) {
 				charts[i][0].renderGraphLines(ident, uiParams);
 				charts[i][0].renderGraph(animParams.finalTransforms[i], i);
-				charts[i][0].renderGraphText(animParams.labelsXInfo[i]);
+				//charts[i][0].renderGraphText(animParams.labelsXInfo[i]);
 				charts[i][0].renderGraph(charts[i][1]);	
 			}
 		}

@@ -230,7 +230,6 @@
 						ctx.fillText(parseInt(labelY), 0, viewHeight - y - 10);
 					}
 					let step = 0;
-					//console.log(labelXInfo.start, labelXInfo.end);
 					//for (let i = labelXInfo.start; step <= chartParams.width; step += 100, i += 2) {
 					for (let i = labelXInfo.start; i < labelXInfo.end; step += 100, i += 2) {
 						let dateUnix = chartData.columns[0][i];
@@ -451,7 +450,7 @@
 						if (x >= rightEndBound) { x = rightEndBound; }
 						view.style.left = x + "px";
 						let dir = deltaX > 0 ? -1 : 1;
-						console.log(scaleFactor);
+						//console.log(scaleFactor);
 						let dx = dir*Math.abs(scaleFactor*deltaX);
 						translate(T, dx, 0);
 						animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);
@@ -491,8 +490,8 @@
 		let animParams = { chartIndex: -1, xranges: [], finalTransforms: [], labelsXInfo: [], yls: []};
 		let uiParams = {nightMode: 1, ctx: ctx, linesColor: [0, 0, 0, 0.25]};
 		viewWidth = chartParams.width;
-		//viewHeight = chartsData.length * (chartParams.height + chartParams.partViewHeight) * 1.7;
-		viewHeight = 3*(chartParams.height + chartParams.partViewHeight);
+		viewHeight = chartsData.length * (chartParams.height + chartParams.partViewHeight) * 1.7;
+		//viewHeight = 3*(chartParams.height + chartParams.partViewHeight);
 		setUpChartApp(gl, textCnv);
 		chartParams.cnvLeft = parseFloat(gl.canvas.style.left);
 		

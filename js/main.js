@@ -125,11 +125,10 @@
 		return (c + d)*0.5;
 	}
 	
-	function getYRange(chartData) {
-		let len = chartData.columns[0].length;
+	function getYRange(chartData, l, r) {
 		let range = {minY: 1e+12, maxY: 1e-12};
 		for (let i = 1; i < chartData.columns.length; ++i) {
-			for (let j = 1; j < len; ++j) {
+			for (let j = l; j <= r; ++j) {
 				if (chartData.columns[i][j] > range.maxY) {
 					range.maxY = chartData.columns[i][j];
 				}
@@ -149,9 +148,9 @@
 		};
 	}				
 	
-	function unixTimeStampToDate(UNIX_timestamp){
+	function unixTimeStampToDate(UNIX_timestamp) {
 		let a = new Date(UNIX_timestamp);
-		let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+		let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 		let month = months[a.getMonth()];
 		let date = a.getDate();
 		let time = month + ' ' + date;
@@ -165,17 +164,18 @@
 		let	vertices = [];
 		let lineVertices = [];
 		let len = chartData.columns[0].length;		
-		let yrange = getYRange(chartData);
+		let yrange = getYRange(chartData, 1, chartData.columns[0].length - 1);
 		let xrange = getXRange(chartData);
 		let colsLen = chartData.columns.length;
 		let graphsCount = colsLen - 1;
 		let minX = xrange.minX;	let maxX = xrange.maxX;
 		let minY = yrange.minY; let maxY = yrange.maxY;	
 		for (let j = 1; j < len; ++j) {
-			let x = mapTo(chartData.columns[0][j], minX, maxX, chartParams.xl, chartParams.xl + chartParams.width);
+			let x = mapTo(chartData.columns[0][j], minX, maxX, 0, chartParams.width);
 			vertices.push(x);
 			for (let k = 1; k < colsLen; ++k) {
-				vertices.push( mapTo(chartData.columns[k][j], minY, maxY, chartParams.yl, chartParams.yl + chartParams.height));
+				let y = mapTo(chartData.columns[k][j], minY, maxY, chartParams.yl, chartParams.yl + chartParams.height);
+				vertices.push(y);
 			}
 		}
 		let graphColors = [];
@@ -188,7 +188,7 @@
 
 		for (let i = 0; i < linesCount; i++) {
 			let y = chartParams.yl + i*70;
-			lineVertices.push(chartParams.xl, y, chartParams.xl + chartParams.width, y);
+			lineVertices.push(0, y, chartParams.width, y);
 		}
 		// setup buffers
 		gl.bindBuffer(gl.ARRAY_BUFFER, linesBuff);
@@ -227,7 +227,7 @@
 					for (let i = 0; i < linesCount; i++) {
 						let y = chartParams.yl + i*70;
 						let labelY = mapTo(i*70, 0, chartParams.height, minY, maxY);
-						ctx.fillText(parseInt(labelY), chartParams.xl, viewHeight - y - 10);
+						ctx.fillText(parseInt(labelY), 0, viewHeight - y - 10);
 					}
 					let step = 0;
 					//console.log(labelXInfo.start, labelXInfo.end);
@@ -236,7 +236,7 @@
 						let dateUnix = chartData.columns[0][i];
 						let date = unixTimeStampToDate(dateUnix);//.substr(3, 8);
 						ctx.fillText(date, 
-							chartParams.xl + step, 
+							step, 
 							viewHeight - chartParams.yl + 20
 						);
 					}
@@ -250,7 +250,7 @@
 		// fullViewBlock.style.width = chartParams.width + "px";
 		// fullViewBlock.style.height = chartParams.partViewHeight + "px";
 		// fullViewBlock.style.top = (viewHeight - chartParams.yl + 45 ) + "px";
-		// fullViewBlock.style.left = chartParams.xl + parseFloat(gl.canvas.style.left) + "px";	
+		// fullViewBlock.style.left = parseFloat(gl.canvas.style.left) + "px";	
 		// document.body.appendChild(fullViewBlock);	
 		
 		let partViewBlock = document.createElement("div");
@@ -259,7 +259,7 @@
 		partViewBlock.style.width = chartParams.width*0.25 + "px";
 		partViewBlock.style.height = chartParams.partViewHeight + "px";
 		partViewBlock.style.top = (viewHeight - chartParams.yl + 45 ) + "px";
-		partViewBlock.style.left = chartParams.xl + parseFloat(gl.canvas.style.left) + "px";
+		partViewBlock.style.left = parseFloat(gl.canvas.style.left) + "px";
 		document.body.appendChild(partViewBlock);
 		
 		let chartTitle = document.createElement("div");
@@ -271,21 +271,6 @@
 		
 		let components = createChartComponents(gl, ctx, chartData, chartParams, uiParams);
 		return components;
-	}
-	
-	function getBottomViewTransform(chartParams) {
-		let T = 			 identity(),
-			S = 			 identity(),
-			TBack = 		 identity(),
-			finalTransform = identity(),
-			dx = 0, dy = chartParams.yl;	
-		translate(T, dx, -dy);
-		translate(TBack, dx, dy - chartParams.partViewHeight);
-		scale(S, 1, 0.2);
-		finalTransform = multMatrices(T, 	 finalTransform);
-		finalTransform = multMatrices(S,  	 finalTransform);
-		finalTransform = multMatrices(TBack, finalTransform);
-		return finalTransform;
 	}
 	
 	function setNightMode(gl, uiParams, switchMode) {
@@ -334,24 +319,80 @@
 		};
 	}
 	
-	function setPartViewDraggable(xl, graphWidth, animParams, dateDiffUnix) {
-		let partViewBlockWidth = parseFloat(document.getElementsByClassName("partView")[0].style.width);
+	function getBottomViewTransform(chartParams) {
+		let T = 			 identity(),
+			S = 			 identity(),
+			TBack = 		 identity(),
+			finalTransform = identity(),
+			dx = 0, dy = chartParams.yl;	
+		translate(T, dx, -dy);
+		translate(TBack, dx, dy - chartParams.partViewHeight);
+		scale(S, 1, 0.2);
+		finalTransform = multMatrices(T, 	 finalTransform);
+		finalTransform = multMatrices(S,  	 finalTransform);
+		finalTransform = multMatrices(TBack, finalTransform);
+		return finalTransform;
+	}
+	
+	// TODO: this function has a lot of things to precompute...
+	function getYScalTransform(animParams, height, chartData) {
+		let i = animParams.chartIndex;
+		let l = animParams.labelsXInfo[i].start;
+		let r = animParams.labelsXInfo[i].end;
+		if (l == r) {
+			return animParams.finalTransforms[i];
+		}
+		let yRangeLocal = getYRange(chartData, l, r);
+		let yMaxGlobal = getYRange(chartData, 0, chartData.columns[0].length-1).maxY;		
+		// let yMaxMaped = mapTo(yRangeLocal.maxY, 0, height, yRangeLocal.minY, yRangeLocal.maxY);
+		// let yMinMaped = mapTo(yRangeLocal.minY, 0, height, yRangeLocal.minY, yRangeLocal.maxY);		
+		let yl = animParams.yls[i];
+		let S = identity();
+		let T = identity();
+		translate(T, 0, -yl);
+
+		//	finish this
+		// console.log(yMaxGlobal);
+		// console.log(yRangeLocal.maxY);
+		console.log(yMaxGlobal/yRangeLocal.maxY);
+		// console.log(animParams.finalTransforms[i][4]);
+		// console.log("\n");
+		
+		let t1 = yMaxGlobal/yRangeLocal.maxY;
+		let t = animParams.finalTransforms[i][4];
+		
+		if (t < t1) {
+			scale(S, 1, 1.05);
+		} //else { scale(S, 1, 1); }
+		
+		if (t > t1) {
+			scale(S, 1, 0.95);
+		} //else { scale(S, 1, 1); }
+		
+		animParams.finalTransforms[i] = multMatrices(T, animParams.finalTransforms[i]);
+		animParams.finalTransforms[i] = multMatrices(S, animParams.finalTransforms[i]);		
+		translate(T, 0, yl);
+		animParams.finalTransforms[i] = multMatrices(T, animParams.finalTransforms[i]);		
+		return animParams.finalTransforms[i];
+	}
+	
+	function setPartViewDraggable(cnvLeft, graphWidth, animParams, dateDiffUnix) {
 		let T = identity();
 		let T1 = identity();
 		let S = identity();
-		let scaleFactor = graphWidth/partViewBlockWidth;
-		let start = 1, end = 1;
+		//let start = 1, end = 1;
 		document.onmousedown = function(e) {
 			if (e.target.className == "partView") {
 				let x = e.clientX;
 				let deltaX = 0;
 				let view = e.target;
+				let scaleFactor = graphWidth/view.clientWidth;
 				let shiftX = x - parseFloat(view.style.left);
 				let viewLeft = parseFloat(view.style.left);
 				let chartIndex = parseInt(view.getAttribute("data-chart-index"));
 				let xrange = animParams.xranges[chartIndex];
 				let rightEndBound = 0;
-				let rightEndBoundNoViewWidth = xl + graphWidth;
+				let rightEndBoundNoViewWidth = cnvLeft + graphWidth;
 				let strechFromLeft = false;
 				let strechFromRight = false;
 				let edgeWidth = 12;
@@ -367,25 +408,33 @@
 				document.onmousemove = function(e) {
 					let viewLeftNew = parseFloat(view.style.left);
 					deltaX = viewLeftNew - viewLeft;
-					viewLeft = viewLeftNew;					
+					viewLeft = viewLeftNew;
 					if (strechFromLeft || strechFromRight) {
 						x = e.clientX;
 						if (strechFromLeft) {
-							if (x <= xl) x = xl;
+							if (x <= cnvLeft) x = cnvLeft;
 							if (x + viewMinWidth > rightEndBoundNoViewWidth) {
 								x = rightEndBoundNoViewWidth - viewMinWidth;
 							}
+							view.style.width = view.clientWidth + (viewLeft - x) + "px";
 							if (view.clientWidth > viewMinWidth) {							
 								view.style.left = x + "px";
+								// start = parseInt(
+									// (mapTo(x, cnvLeft, cnvLeft + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
+								// );							
 							}
-							view.style.width = view.clientWidth + (viewLeft - x) + "px";						
 						} else {
 							if (x >= rightEndBoundNoViewWidth) { x = rightEndBoundNoViewWidth; }
 							view.style.width = view.clientWidth + (x - view.clientWidth - viewLeft) + "px";
+							// if (view.clientWidth > viewMinWidth) {								
+								// end = parseInt(
+									// (mapTo(x, cnvLeft, cnvLeft + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
+								// );
+							// }
 						}
-						if (view.clientWidth > viewMinWidth) {			
+						if (view.clientWidth > viewMinWidth) {
 							scaleFactor = graphWidth/view.clientWidth;
-							let dx = xl - viewLeft;
+							let dx = cnvLeft - viewLeft;
 							translate(T1, dx, 0);
 							scale(S, scaleFactor, 1);
 							animParams.finalTransforms[chartIndex] = identity();
@@ -398,20 +447,22 @@
 					} else {
 						x = e.clientX - shiftX;
 						rightEndBound = rightEndBoundNoViewWidth - view.clientWidth
-						if (x <= xl) { x = xl; }
+						if (x <= cnvLeft) { x = cnvLeft; }
 						if (x >= rightEndBound) { x = rightEndBound; }
 						view.style.left = x + "px";
 						let dir = deltaX > 0 ? -1 : 1;
+						console.log(scaleFactor);
 						let dx = dir*Math.abs(scaleFactor*deltaX);
 						translate(T, dx, 0);
-						animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);					
+						animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);
+						// convert slider x coordinate into x-axis array start and end indexes
 						// start = parseInt(
-							// (mapTo(x, xl, xl + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
+							// (mapTo(x, cnvLeft, cnvLeft + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
 						// );
-						//view.style.right = rightEndBound - x + "px";
-					}			
-					// convert slider x coordinate into x-axis array index
-					//console.log(start, end);
+						// end = parseInt(
+							// (mapTo(x + view.clientWidth, cnvLeft, cnvLeft + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
+						// );
+					}
 					// animParams.labelsXInfo[chartIndex].start = start + 1;
 					// animParams.labelsXInfo[chartIndex].end = end;
 				}
@@ -434,17 +485,17 @@
 		let prevYl = 0;
 		let charts = [];
 		let chartParams = {};
-			chartParams.xl = 0;
 			chartParams.width = window.innerWidth * 0.65;
 			chartParams.height = 300;
 			chartParams.partViewHeight = chartParams.height*0.5;
-		let animParams = { xranges: [], finalTransforms: [], labelsXInfo: []};
+		let animParams = { chartIndex: -1, xranges: [], finalTransforms: [], labelsXInfo: [], yls: []};
 		let uiParams = {nightMode: 1, ctx: ctx, linesColor: [0, 0, 0, 0.25]};
 		viewWidth = chartParams.width;
 		//viewHeight = chartsData.length * (chartParams.height + chartParams.partViewHeight) * 1.7;
 		viewHeight = 3*(chartParams.height + chartParams.partViewHeight);
 		setUpChartApp(gl, textCnv);
-		console.log(chartsData);
+		chartParams.cnvLeft = parseFloat(gl.canvas.style.left);
+		
 		for (let i = 0; i < chartsData.length; ++i) {
 			let T = 		 	 identity(),
 				S = 			 identity(),
@@ -461,17 +512,23 @@
 			charts.push([chart, bottomViewTransform]);
 			prevYl = chartParams.yl;
 			animParams.xranges.push(getXRange(chartsData[i]));
+			animParams.yls[i] = chartParams.yl;
 			animParams.labelsXInfo.push({start: 1, end: 1});
 		}
 		
 		let dateDiffUnix = chartsData[0].columns[0][2] - chartsData[0].columns[0][1];
-		setPartViewDraggable(parseFloat(gl.canvas.style.left), chartParams.width, animParams, dateDiffUnix);		
+		setPartViewDraggable(chartParams.cnvLeft, chartParams.width, animParams, dateDiffUnix);		
 		setUpUi(gl, uiParams);
 		
 		function renderScene() {
 			timerID = requestAnimationFrame(renderScene);
 			gl.clear(gl.COLOR_BUFFER_BIT);
 			//ctx.clearRect(0, 0, viewWidth, viewHeight);	//	make text canvas height to be textheight size
+			// if (animParams.chartIndex >= 0) {
+				// animParams.finalTransforms[animParams.chartIndex] = 
+					// getYScalTransform(animParams, chartParams.height, chartsData[animParams.chartIndex]);
+			// }
+			
 			for (let i = 0; i < charts.length; ++i) {
 				charts[i][0].renderGraphLines(ident, uiParams);
 				charts[i][0].renderGraph(animParams.finalTransforms[i], i);

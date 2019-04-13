@@ -349,25 +349,20 @@
 		let S = identity();
 		let T = identity();
 		translate(T, 0, -yl);
-
 		//	finish this
 		// console.log(yMaxGlobal);
 		// console.log(yRangeLocal.maxY);
 		console.log(yMaxGlobal/yRangeLocal.maxY);
 		// console.log(animParams.finalTransforms[i][4]);
-		// console.log("\n");
-		
+		// console.log("\n");		
 		let t1 = yMaxGlobal/yRangeLocal.maxY;
-		let t = animParams.finalTransforms[i][4];
-		
+		let t = animParams.finalTransforms[i][4];		
 		if (t < t1) {
 			scale(S, 1, 1.05);
-		} //else { scale(S, 1, 1); }
-		
+		} //else { scale(S, 1, 1); }		
 		if (t > t1) {
 			scale(S, 1, 0.95);
-		} //else { scale(S, 1, 1); }
-		
+		} //else { scale(S, 1, 1); }		
 		animParams.finalTransforms[i] = multMatrices(T, animParams.finalTransforms[i]);
 		animParams.finalTransforms[i] = multMatrices(S, animParams.finalTransforms[i]);		
 		translate(T, 0, yl);
@@ -377,7 +372,6 @@
 	
 	function setPartViewDraggable(cnvLeft, graphWidth, animParams, dateDiffUnix) {
 		let T = identity();
-		let T1 = identity();
 		let S = identity();
 		//let start = 1, end = 1;
 		document.onmousedown = function(e) {
@@ -386,8 +380,8 @@
 				let deltaX = 0;
 				let view = e.target;
 				let scaleFactor = graphWidth/view.clientWidth;
-				let shiftX = x - parseFloat(view.style.left);
 				let viewLeft = parseFloat(view.style.left);
+				let shiftX = x - viewLeft;
 				let chartIndex = parseInt(view.getAttribute("data-chart-index"));
 				let xrange = animParams.xranges[chartIndex];
 				let rightEndBound = 0;
@@ -395,11 +389,11 @@
 				let strechFromLeft = false;
 				let strechFromRight = false;
 				let edgeWidth = 12;
-				let viewMinWidth = 50;
+				let viewMinWidth = 25;//graphWidth/16;
 				animParams.chartIndex = chartIndex;
 				if (e.clientX + 20 >= viewLeft && e.clientX <= viewLeft + edgeWidth) {
 					strechFromLeft = true;
-				}		
+				}
 				if ((e.clientX >= viewLeft + view.clientWidth - edgeWidth 
 					&& e.clientX - 20 <= viewLeft + view.clientWidth)) {
 					strechFromRight = true;
@@ -411,20 +405,23 @@
 					if (strechFromLeft || strechFromRight) {
 						x = e.clientX;
 						if (strechFromLeft) {
-							if (x <= cnvLeft) x = cnvLeft;
+							if (x < cnvLeft) x = cnvLeft;
 							if (x + viewMinWidth > rightEndBoundNoViewWidth) {
 								x = rightEndBoundNoViewWidth - viewMinWidth;
 							}
-							view.style.width = view.clientWidth + (viewLeft - x) + "px";
-							if (view.clientWidth > viewMinWidth) {							
+							if (view.clientWidth > viewMinWidth) {
 								view.style.left = x + "px";
 								// start = parseInt(
 									// (mapTo(x, cnvLeft, cnvLeft + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
 								// );							
 							}
+							view.style.width = view.clientWidth + (viewLeft - x) + "px";
 						} else {
-							if (x >= rightEndBoundNoViewWidth) { x = rightEndBoundNoViewWidth; }
-							view.style.width = view.clientWidth + (x - view.clientWidth - viewLeft) + "px";
+							if (x < cnvLeft) x = cnvLeft;
+							if (x > rightEndBoundNoViewWidth) { x = rightEndBoundNoViewWidth; }
+							if (x > viewLeft + viewMinWidth) { 
+								view.style.width = view.clientWidth + (x - view.clientWidth - viewLeft) + "px";
+							}
 							// if (view.clientWidth > viewMinWidth) {								
 								// end = parseInt(
 									// (mapTo(x, cnvLeft, cnvLeft + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
@@ -434,11 +431,11 @@
 						if (view.clientWidth > viewMinWidth) {
 							scaleFactor = graphWidth/view.clientWidth;
 							let dx = cnvLeft - viewLeft;
-							translate(T1, dx, 0);
+							translate(T, dx, 0);
 							scale(S, scaleFactor, 1);
-							animParams.finalTransforms[chartIndex] = identity();
-							animParams.finalTransforms[chartIndex] = multMatrices(T1, animParams.finalTransforms[chartIndex]);
-							animParams.finalTransforms[chartIndex] = multMatrices(S, animParams.finalTransforms[chartIndex]);
+							//animParams.finalTransforms[chartIndex] = identity();
+							animParams.finalTransforms[chartIndex] = multMatrices(S, T);
+							//animParams.finalTransforms[chartIndex] = multMatrices(S, animParams.finalTransforms[chartIndex]);
 						}
 						if (view.clientWidth <= viewMinWidth) {
 							view.style.width = viewMinWidth + "px";
@@ -446,14 +443,13 @@
 					} else {
 						x = e.clientX - shiftX;
 						rightEndBound = rightEndBoundNoViewWidth - view.clientWidth
-						if (x <= cnvLeft) { x = cnvLeft; }
-						if (x >= rightEndBound) { x = rightEndBound; }
+						if (x < cnvLeft) 		{ x = cnvLeft; }
+						if (x > rightEndBound)	{ x = rightEndBound; }
 						view.style.left = x + "px";
 						let dir = deltaX > 0 ? -1 : 1;
-						//console.log(scaleFactor);
 						let dx = dir*Math.abs(scaleFactor*deltaX);
 						translate(T, dx, 0);
-						animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);
+						animParams.finalTransforms[chartIndex] = multMatrices(T, animParams.finalTransforms[chartIndex]);						
 						// convert slider x coordinate into x-axis array start and end indexes
 						// start = parseInt(
 							// (mapTo(x, cnvLeft, cnvLeft + graphWidth, xrange.minX, xrange.maxX) - xrange.minX)/dateDiffUnix
@@ -467,6 +463,7 @@
 				}
 				document.onmouseup = function(e) {
 					document.onmousemove = null;
+					//animParams.chartIndex = -1;
 				}
 			}
 		};
